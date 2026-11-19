@@ -1,0 +1,1801 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>[Audio Creature] - Spectral Morphology Lab</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #020617; /* 深海暗夜藍 */
+            --text-main: #e2e8f0; 
+            --text-muted: #64748b;
+            --accent: #06b6d4; /* 聲納青色 */
+            --accent-glow: rgba(6, 182, 212, 0.4);
+            --fuse-glow: rgba(139, 92, 246, 0.6);
+            --panel-bg: rgba(15, 23, 42, 0.65); /* 暗色玻璃面板 */
+            --panel-border: rgba(255, 255, 255, 0.1);
+            --grid-color: rgba(255, 255, 255, 0.03);
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            font-family: 'Inter', -apple-system, sans-serif;
+            overflow: hidden;
+            display: flex;
+            height: 100vh;
+        }
+
+        #canvas-container {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            cursor: crosshair;
+            background: 
+                radial-gradient(circle at center, #0f172a 0%, #020617 100%), /* 模擬光線無法抵達的深海底 */
+                linear-gradient(var(--grid-color) 1px, transparent 1px),
+                linear-gradient(90deg, var(--grid-color) 1px, transparent 1px);
+            background-size: 100% 100%, 20px 20px, 20px 20px;
+            background-blend-mode: multiply;
+            z-index: 1;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        .vignette {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none;
+            background: radial-gradient(circle, transparent 50%, rgba(0,0,0,0.15) 150%);
+            z-index: 2;
+        }
+
+        .reticle {
+            position: absolute;
+            width: 30px; height: 30px;
+            border-color: rgba(0,0,0,0.3);
+            border-style: solid;
+            pointer-events: none;
+            z-index: 3;
+            transition: all 0.3s ease;
+        }
+        .reticle.tl { top: 20px; left: 20px; border-width: 2px 0 0 2px; }
+        .reticle.tr { top: 20px; right: 20px; border-width: 2px 2px 0 0; }
+        .reticle.bl { bottom: 20px; left: 20px; border-width: 0 0 2px 2px; }
+        .reticle.br { bottom: 20px; right: 20px; border-width: 0 2px 2px 0; }
+
+        .ui-layer {
+            position: absolute;
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+            pointer-events: none; 
+        }
+
+        .panel {
+            background: var(--panel-bg);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--panel-border);
+            border-radius: 12px;
+            padding: 20px;
+            pointer-events: auto;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.05);
+        }
+
+        header {
+            position: absolute;
+            top: 30px; left: 60px;
+            z-index: 10;
+            pointer-events: none;
+        }
+        .sys-title {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 14px;
+            font-weight: 700;
+            letter-spacing: 2px;
+            color: var(--text-main);
+            margin-bottom: 6px;
+        }
+        .sys-status {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            color: var(--accent);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .blink {
+            width: 8px; height: 8px;
+            background-color: var(--accent);
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse { 0% { opacity: 1; box-shadow: 0 0 8px var(--accent); } 50% { opacity: 0.3; box-shadow: 0 0 0 transparent; } 100% { opacity: 1; box-shadow: 0 0 8px var(--accent); } }
+
+        .panel-title {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--text-muted);
+            border-bottom: 1px solid var(--panel-border);
+            padding-bottom: 10px;
+            margin-bottom: 15px;
+            letter-spacing: 1px;
+        }
+
+        .data-panel {
+            top: 50%; right: 30px;
+            transform: translateY(-50%);
+            width: 240px;
+            transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .data-panel.collapsed {
+            transform: translate(calc(100% + 30px), -50%);
+        }
+        .telemetry-toggle {
+            position: absolute;
+            left: -28px; top: 20px;
+            width: 28px; height: 36px;
+            background: var(--panel-bg);
+            border: 1px solid var(--panel-border);
+            border-right: none;
+            border-radius: 8px 0 0 8px;
+            cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: bold; color: var(--accent);
+            backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+            box-shadow: -4px 0 12px rgba(0,0,0,0.3);
+        }
+        .telemetry-toggle:hover { background: rgba(6, 182, 212, 0.2); }
+        
+        .btn-remove {
+            width: 100%; margin-top: 15px;
+            border-color: rgba(239, 68, 68, 0.5); color: #ef4444;
+        }
+        .btn-remove:hover {
+            background: #ef4444; color: white; border-color: #ef4444;
+            box-shadow: 0 4px 15px rgba(239, 68, 68, 0.3);
+        }
+
+        .data-grid {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .data-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px dashed rgba(255,255,255,0.06);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+        }
+        .data-row:last-child { border-bottom: none; }
+        .data-label { color: var(--text-muted); }
+        .data-value { color: var(--text-main); font-weight: 700; text-align: right; }
+        .val-highlight { color: var(--accent); }
+
+        .action-panel {
+            bottom: 30px; left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            flex-direction: row;
+            gap: 15px;
+            padding: 12px 24px;
+            border-radius: 30px;
+            width: max-content;
+            max-width: 95vw;
+            flex-wrap: wrap;
+            justify-content: center;
+            box-sizing: border-box;
+        }
+
+        .btn-science {
+            background: rgba(15, 23, 42, 0.8);
+            color: var(--text-main);
+            border: 1px solid var(--panel-border);
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+        }
+        .btn-science:hover:not(:disabled) {
+            background: var(--accent);
+            color: white;
+            border-color: var(--accent);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px var(--accent-glow);
+        }
+        .btn-science.active {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: white;
+            box-shadow: 0 4px 15px var(--accent-glow);
+        }
+        .btn-science:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-battle {
+            background: rgba(30, 10, 10, 0.8);
+            border-color: rgba(239, 68, 68, 0.6);
+            color: #ef4444;
+        }
+        .btn-battle:hover:not(:disabled) {
+            background: #ef4444; color: white; border-color: #ef4444;
+            box-shadow: 0 4px 15px rgba(239, 68, 68, 0.4);
+        }
+        .btn-battle.active {
+            background: #ef4444; color: white; border-color: #ef4444;
+            animation: pulseBattle 1.5s infinite;
+        }
+        @keyframes pulseBattle {
+            0% { box-shadow: 0 0 5px rgba(239,68,68,0.4); }
+            50% { box-shadow: 0 0 20px rgba(239,68,68,0.8); }
+            100% { box-shadow: 0 0 5px rgba(239,68,68,0.4); }
+        }
+
+        input[type="file"] { display: none; }
+
+        #loading-msg {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--accent);
+            display: none;
+            letter-spacing: 2px;
+            background: var(--panel-bg);
+            backdrop-filter: blur(12px);
+            padding: 15px 30px;
+            border: 1px solid var(--accent);
+            border-radius: 8px;
+            z-index: 100;
+            box-shadow: 0 10px 30px var(--accent-glow);
+            text-align: center;
+        }
+
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: transparent;
+            pointer-events: none;
+            z-index: 50;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .report-modal {
+            background: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--accent);
+            border-radius: 12px;
+            padding: 25px;
+            width: 320px;
+            box-shadow: 0 15px 40px rgba(0,0,0,0.5);
+            transform: translateY(20px);
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            font-family: 'JetBrains Mono', monospace;
+            pointer-events: auto;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+            opacity: 1;
+        }
+        .modal-overlay.active .report-modal {
+            transform: translateY(0);
+        }
+
+        .report-header {
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--accent);
+            border-bottom: 1px dashed var(--accent);
+            padding-bottom: 8px;
+            margin-bottom: 15px;
+            text-align: center;
+            letter-spacing: 2px;
+        }
+
+        .report-score-ring {
+            width: 110px; height: 110px;
+            border-radius: 50%;
+            border: 4px solid var(--panel-border);
+            border-top-color: var(--accent);
+            margin: 0 auto 15px auto;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            animation: spinRing 4s linear infinite;
+        }
+
+        .report-score-inner {
+            animation: spinRing 4s linear infinite reverse;
+            text-align: center;
+        }
+
+        @keyframes spinRing { 100% { transform: rotate(360deg); } }
+
+        .score-val { font-size: 28px; font-weight: 800; color: var(--text-main); }
+        .score-lbl { font-size: 9px; color: var(--text-muted); margin-top: 2px;}
+
+        .report-details {
+            margin-bottom: 15px;
+        }
+
+        .report-actions {
+            display: flex; gap: 10px;
+        }
+        .btn-modal {
+            flex: 1;
+            padding: 10px;
+            border-radius: 20px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 10px; font-weight: 700; cursor: pointer;
+            text-align: center; transition: all 0.2s;
+        }
+        .btn-confirm { background: var(--accent); color: white; border: none; }
+        .btn-confirm:hover { background: #1d4ed8; box-shadow: 0 0 15px var(--accent-glow); }
+        .btn-fuse {
+            background: linear-gradient(135deg, #7c3aed, #06b6d4);
+            color: white; border: none; display: none;
+            animation: pulseFuse 1.5s infinite alternate;
+        }
+        @keyframes pulseFuse {
+            0% { box-shadow: 0 0 5px var(--fuse-glow); }
+            100% { box-shadow: 0 0 20px var(--fuse-glow), 0 0 30px var(--accent-glow); }
+        }
+        .btn-fuse:hover {
+            transform: scale(1.03);
+            background: linear-gradient(135deg, #6d28d9, #0891b2);
+        }
+        .btn-cancel { background: transparent; color: var(--text-main); border: 1px solid var(--panel-border); }
+        .btn-cancel:hover { background: rgba(255,255,255,0.05); }
+
+        .entry-modal {
+            background: rgba(15, 23, 42, 0.9);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--accent);
+            border-radius: 12px;
+            padding: 30px;
+            width: 420px;
+            max-width: 90vw;
+            box-shadow: 0 15px 50px rgba(0,0,0,0.8), 0 0 30px rgba(6, 182, 212, 0.2);
+            font-family: 'JetBrains Mono', 'Inter', sans-serif;
+            pointer-events: auto;
+            text-align: center;
+        }
+        .entry-title {
+            font-size: 18px;
+            font-weight: 800;
+            color: var(--accent);
+            margin-bottom: 15px;
+            letter-spacing: 2px;
+            border-bottom: 1px solid var(--panel-border);
+            padding-bottom: 12px;
+        }
+        .entry-desc {
+            font-family: 'Inter', sans-serif;
+            font-size: 14px;
+            color: var(--text-main);
+            line-height: 1.6;
+            margin-bottom: 20px;
+            text-align: left;
+        }
+        .entry-desc p { margin: 10px 0; }
+        .entry-warning {
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-bottom: 25px;
+            text-align: left;
+            border-left: 2px solid var(--accent);
+            padding-left: 10px;
+            background: rgba(6, 182, 212, 0.05);
+            padding: 10px;
+            border-radius: 0 4px 4px 0;
+        }
+        .btn-enter {
+            width: 100%;
+            padding: 14px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 14px;
+            background: var(--accent);
+            color: #020617;
+            border: none;
+            border-radius: 8px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 0 15px var(--accent-glow);
+            letter-spacing: 1px;
+        }
+        .btn-enter:hover {
+            background: #0891b2;
+            color: #fff;
+            box-shadow: 0 0 25px rgba(6, 182, 212, 0.6);
+            transform: translateY(-2px);
+        }
+
+        #camera-feed { display: none; }
+
+        /* 手機版響應式精簡設計 */
+        @media (max-width: 768px) {
+            header { top: 15px; left: 15px; }
+            .sys-title { font-size: 11px; }
+            .sys-status { font-size: 9px; }
+            
+            /* 手機版遙測面板：精簡高度並採用雙欄排版 */
+            .data-panel { 
+                top: 65px; 
+                bottom: auto; 
+                right: 12px; 
+                transform: none; 
+                width: 210px; 
+                padding: 12px 14px;
+                background: rgba(15, 23, 42, 0.82);
+            }
+            .data-panel.collapsed { 
+                transform: translateX(calc(100% + 12px)); 
+            }
+            .telemetry-toggle {
+                left: -34px;
+                top: 0;
+                width: 34px;
+                height: 34px;
+                border-radius: 8px 0 0 8px;
+                font-size: 12px;
+            }
+            .panel-title {
+                font-size: 10px;
+                padding-bottom: 6px;
+                margin-bottom: 8px;
+            }
+            /* 將數據改為雙欄顯示，大幅減少垂直高度 */
+            .data-grid {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 4px 10px;
+            }
+            .data-row {
+                flex-direction: column;
+                padding: 4px 0;
+                border-bottom: 1px solid rgba(255,255,255,0.05);
+                font-size: 10px;
+            }
+            .data-value {
+                text-align: left;
+                margin-top: 2px;
+            }
+            /* 手機版隱藏次要數據以保留畫布空間 */
+            .mobile-hide {
+                display: none !important;
+            }
+            .btn-remove {
+                margin-top: 10px;
+                padding: 6px 10px;
+                font-size: 10px;
+            }
+
+            .action-panel { 
+                bottom: 15px; padding: 10px; gap: 8px; 
+                border-radius: 16px; width: 95vw;
+            }
+            .btn-science { padding: 8px 12px; font-size: 10px; }
+            .reticle { width: 15px; height: 15px; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="modal-overlay active" id="entryOverlay" style="z-index: 200;">
+        <div class="entry-modal">
+            <div class="entry-title">SPECTRAL MORPHOLOGY LAB</div>
+            <div class="entry-desc">
+                <p>歡迎來到深海實驗室。</p>
+                <p>在深海的極端環境中，我們發現了能夠躲藏在環境聲波中的未知生物 —— <strong>聲波生物</strong>。</p>
+                <p>本系統將透過您的感測器捕捉周遭環境訊號。請觀察、探索周遭的聲音，來找出躲藏在四周的這些聲波生物。</p>
+            </div>
+            <div class="entry-warning">
+                * 系統需求：點擊下方按鈕後，將要求預先啟動「攝影機」與「麥克風」權限，以確保後續探索與戰鬥程序順暢（授權後不會再次彈窗打擾）。
+            </div>
+            <button class="btn-enter" id="btnEnterGame">[ 進入遊戲 / INITIATE LINK ]</button>
+        </div>
+    </div>
+
+    <div class="reticle tl"></div>
+    <div class="reticle tr"></div>
+    <div class="reticle bl"></div>
+    <div class="reticle br"></div>
+
+    <header>
+        <div class="sys-title">SONIC_OCEAN_EXPLORER // V.4.2</div>
+        <div class="sys-status"><span class="blink"></span> SONAR.STANDBY &mdash; NO ENTITIES DETECTED</div>
+    </header>
+
+    <div id="loading-msg">EXTRACTING_AUDIO_DNA...</div>
+
+    <div class="modal-overlay" id="reportModalOverlay">
+        <div class="report-modal">
+            <div class="report-header">RESONANCE_REPORT</div>
+            
+            <div class="report-score-ring">
+                <div class="report-score-inner">
+                    <div class="score-val" id="rep-score">0%</div>
+                    <div class="score-lbl">HARMONY</div>
+                </div>
+            </div>
+
+            <div class="report-details">
+                <div class="data-row" style="flex-direction: row;">
+                    <span class="data-label">TONALITY</span>
+                    <span class="data-value val-highlight" id="rep-tonality">--</span>
+                </div>
+                <div class="data-row" style="flex-direction: row;">
+                    <span class="data-label">STATUS</span>
+                    <span class="data-value" id="rep-status">--</span>
+                </div>
+                <div class="data-row" style="flex-direction: row;">
+                    <span class="data-label">POPULATION</span>
+                    <span class="data-value" id="rep-pop">0/8</span>
+                </div>
+                <div class="data-row" style="flex-direction: row;">
+                    <span class="data-label">ACCUM_ENERGY</span>
+                    <span class="data-value" id="rep-energy" style="color: #a855f7;">0</span>
+                </div>
+            </div>
+
+            <div class="report-actions">
+                <button class="btn-modal btn-fuse" id="btnFuseModal">🧬 FUSE (EVOLVE)</button>
+                <button class="btn-modal btn-cancel" id="btnCancelModal" style="width: 100%;">CLOSE REPORT</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="canvas-container">
+        <canvas id="artCanvas"></canvas>
+        <div class="vignette"></div>
+    </div>
+
+    <video id="camera-feed" autoplay playsinline muted></video>
+
+    <div class="ui-layer panel data-panel" id="telemetryPanel">
+        <div class="telemetry-toggle" id="telemetryToggle" title="Toggle Telemetry">&gt;</div>
+        <div class="panel-title">CREATURE_TELEMETRY</div>
+        
+        <div class="data-grid">
+            <div class="data-row">
+                <span class="data-label">SUBJECT_ID</span>
+                <span class="data-value" id="d-id">--</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">INTEGRITY</span>
+                <span class="data-value" id="d-hp" style="color: #ef4444;">--</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">FREQ_CORE</span>
+                <span class="data-value"><span id="d-freq">--</span> Hz</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">STATUS</span>
+                <span class="data-value val-highlight" id="d-state">STANDBY</span>
+            </div>
+            <div class="data-row mobile-hide">
+                <span class="data-label">BRIGHTNESS</span>
+                <span class="data-value" id="d-bri">--</span>
+            </div>
+            <div class="data-row mobile-hide">
+                <span class="data-label">ROUGHNESS</span>
+                <span class="data-value" id="d-rog">--</span>
+            </div>
+            <div class="data-row mobile-hide">
+                <span class="data-label">BIOME_RAD</span>
+                <span class="data-value" id="d-rad">--</span>
+            </div>
+            <div class="data-row mobile-hide">
+                <span class="data-label">FLOW_RATE</span>
+                <span class="data-value" id="d-flow">--</span>
+            </div>
+            <div class="data-row mobile-hide">
+                <span class="data-label">EXCITATION</span>
+                <span class="data-value val-highlight" id="d-vib">--</span>
+            </div>
+        </div>
+        <button class="btn-science btn-remove" id="removeBtn">Remove Source</button>
+    </div>
+
+    <div class="ui-layer panel action-panel">
+        <label for="audioUpload" class="btn-science">Upload Audio</label>
+        <input type="file" id="audioUpload" accept="audio/*">
+        <button class="btn-science" id="recordBtn">Record Mic</button>
+        <button class="btn-science btn-battle" id="battleBtn">⚔️ BATTLE</button>
+        <button class="btn-science" id="autoToggleBtn">Auto Resonate: OFF</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('artCanvas');
+        const ctx = canvas.getContext('2d');
+        let width, height, time = 0;
+        let creatures = []; 
+        let audioCtx, masterGain, delayNode, feedbackGain;
+        let isAutoMode = false;
+        let focusedCreature = null; 
+        let globalCreatureId = 1;
+
+        let mouseX = 0;
+        let mouseY = 0;
+
+        // AR Background Variables
+        const cameraFeed = document.getElementById('camera-feed');
+        let isRecording = false;
+        let scanLineY = 0;
+
+        // Fusion State Variables
+        let isFusing = false;
+        let fusionProgress = 0;
+        let fusionFlash = 0;
+        let screenRedFlash = 0; 
+        let accumulatedEnergy = 0;
+        let currentHarmonyScore = 0;
+
+        // UI Elements
+        const autoToggleBtn = document.getElementById('autoToggleBtn');
+        const battleBtn = document.getElementById('battleBtn');
+        const audioUpload = document.getElementById('audioUpload');
+        const recordBtn = document.getElementById('recordBtn');
+        const removeBtn = document.getElementById('removeBtn');
+        const loadingMsg = document.getElementById('loading-msg');
+        const telemetryPanel = document.getElementById('telemetryPanel');
+        const telemetryToggle = document.getElementById('telemetryToggle');
+
+        const reportModalOverlay = document.getElementById('reportModalOverlay');
+        const btnCancelModal = document.getElementById('btnCancelModal');
+        const btnFuseModal = document.getElementById('btnFuseModal');
+        const repScore = document.getElementById('rep-score');
+        const repTonality = document.getElementById('rep-tonality');
+        const repStatus = document.getElementById('rep-status');
+        const repPop = document.getElementById('rep-pop');
+        const repEnergy = document.getElementById('rep-energy');
+
+        const entryOverlay = document.getElementById('entryOverlay');
+        const btnEnterGame = document.getElementById('btnEnterGame');
+
+        // 手機版預設自動收合遙測面板，釋放畫面空間
+        function initResponsivePanel() {
+            if (window.innerWidth <= 768) {
+                telemetryPanel.classList.add('collapsed');
+                telemetryToggle.textContent = '📊';
+            } else {
+                telemetryPanel.classList.remove('collapsed');
+                telemetryToggle.textContent = '>';
+            }
+        }
+        initResponsivePanel();
+
+        btnEnterGame.addEventListener('click', async () => {
+            btnEnterGame.textContent = 'CONNECTING SENSORS...';
+            btnEnterGame.disabled = true;
+
+            if (!audioCtx) initAudio();
+            if (audioCtx.state === 'suspended') await audioCtx.resume();
+
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    audio: true, 
+                    video: { facingMode: 'environment' } 
+                });
+                stream.getTracks().forEach(track => track.stop());
+            } catch (err) {
+                console.warn("預先取得權限失敗或被拒絕", err);
+            }
+
+            entryOverlay.classList.remove('active');
+        });
+
+        telemetryToggle.addEventListener('click', () => {
+            telemetryPanel.classList.toggle('collapsed');
+            const isCollapsed = telemetryPanel.classList.contains('collapsed');
+            if (window.innerWidth <= 768) {
+                telemetryToggle.textContent = isCollapsed ? '📊' : '×';
+            } else {
+                telemetryToggle.textContent = isCollapsed ? '<' : '>';
+            }
+        });
+
+        // Data Display Elements
+        const dId = document.getElementById('d-id');
+        const dFreq = document.getElementById('d-freq');
+        const dBri = document.getElementById('d-bri');
+        const dRog = document.getElementById('d-rog');
+        const dRad = document.getElementById('d-rad');
+        const dFlow = document.getElementById('d-flow');
+        const dVib = document.getElementById('d-vib');
+        const dHp = document.getElementById('d-hp');
+        const dState = document.getElementById('d-state');
+        const statusHeader = document.querySelector('.sys-status');
+
+        function getPitchData(freq) {
+            const noteStrings = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+            const midi = Math.round(12 * Math.log2(freq / 440)) + 69;
+            const noteName = noteStrings[(midi % 12 + 12) % 12];
+            return { midi, noteName };
+        }
+
+        function generateReport() {
+            repPop.textContent = `${creatures.length}/8`;
+            repEnergy.textContent = accumulatedEnergy.toLocaleString();
+            
+            if (creatures.length === 0) {
+                currentHarmonyScore = 0;
+                repScore.textContent = "0%";
+                repTonality.textContent = "N/A";
+                repStatus.textContent = "NO_DATA";
+                repStatus.style.color = "var(--text-muted)";
+                btnFuseModal.style.display = 'none';
+                btnCancelModal.style.width = '100%';
+                return;
+            }
+
+            if (creatures.length === 1) {
+                currentHarmonyScore = 0;
+                const pd = getPitchData(creatures[0].chordFreqs ? creatures[0].chordFreqs[0] : creatures[0].freq);
+                repScore.textContent = "0%";
+                repTonality.textContent = `${pd.noteName} (SOLO)`;
+                repStatus.textContent = "LONE_SIGNAL";
+                repStatus.style.color = "var(--text-muted)";
+                btnFuseModal.style.display = 'none';
+                btnCancelModal.style.width = '100%';
+                return;
+            }
+
+            const consonanceWeights = [1.0, 0.1, 0.3, 0.7, 0.8, 0.8, 0.0, 1.0, 0.6, 0.7, 0.4, 0.2];
+            
+            let totalScore = 0;
+            let pairs = 0;
+            let noteCounts = {};
+
+            creatures.forEach(c => {
+                const f = c.chordFreqs ? c.chordFreqs[0] : c.freq;
+                const pd = getPitchData(f);
+                noteCounts[pd.noteName] = (noteCounts[pd.noteName] || 0) + 1;
+            });
+
+            for (let i = 0; i < creatures.length; i++) {
+                for (let j = i + 1; j < creatures.length; j++) {
+                    const f1 = creatures[i].chordFreqs ? creatures[i].chordFreqs[0] : creatures[i].freq;
+                    const f2 = creatures[j].chordFreqs ? creatures[j].chordFreqs[0] : creatures[j].freq;
+                    const m1 = getPitchData(f1).midi;
+                    const m2 = getPitchData(f2).midi;
+                    const interval = Math.abs(m1 - m2) % 12;
+                    totalScore += consonanceWeights[interval];
+                    pairs++;
+                }
+            }
+
+            const harmonyRatio = totalScore / (pairs || 1);
+            const finalScore = Math.round(harmonyRatio * 100);
+            currentHarmonyScore = finalScore;
+            
+            let rootNote = Object.keys(noteCounts).reduce((a, b) => noteCounts[a] > noteCounts[b] ? a : b);
+            
+            repScore.textContent = `${finalScore}%`;
+            
+            if (finalScore >= 80) {
+                repTonality.textContent = `${rootNote} Harmonic`;
+                repStatus.textContent = "PERFECT_RESONANCE";
+                repStatus.style.color = "var(--accent)";
+                
+                btnFuseModal.style.display = 'block';
+                btnCancelModal.style.width = 'auto';
+            } else if (finalScore >= 50) {
+                repTonality.textContent = `${rootNote} Complex`;
+                repStatus.textContent = "STABLE_CHORD";
+                repStatus.style.color = "var(--text-main)";
+                btnFuseModal.style.display = 'none';
+                btnCancelModal.style.width = '100%';
+            } else {
+                repTonality.textContent = "Atonal (無調性)";
+                repStatus.textContent = "CHAOTIC_DISSONANCE";
+                repStatus.style.color = "#ef4444";
+                btnFuseModal.style.display = 'none';
+                btnCancelModal.style.width = '100%';
+            }
+        }
+
+        autoToggleBtn.addEventListener('click', () => {
+            if (!isAutoMode) {
+                isAutoMode = true;
+                autoToggleBtn.textContent = 'Auto Resonate: ON';
+                autoToggleBtn.classList.add('active');
+                if (!audioCtx) initAudio();
+                if (audioCtx.state === 'suspended') audioCtx.resume();
+
+                generateReport();
+                reportModalOverlay.classList.add('active');
+            } else {
+                isAutoMode = false;
+                autoToggleBtn.textContent = 'Auto Resonate: OFF';
+                autoToggleBtn.classList.remove('active');
+                reportModalOverlay.classList.remove('active');
+            }
+        });
+
+        btnCancelModal.addEventListener('click', () => {
+            reportModalOverlay.classList.remove('active');
+        });
+
+        btnFuseModal.addEventListener('click', () => {
+            reportModalOverlay.classList.remove('active');
+            triggerFusion();
+        });
+
+        function triggerFusion() {
+            if (creatures.length < 2 || isFusing) return;
+            isFusing = true;
+            fusionProgress = 0;
+            showMessage("HARMONIC_FUSION_INITIATED...", 0);
+
+            creatures.forEach(c => c.stop());
+        }
+
+        class Creature {
+            constructor(id, x, dna, isFused = false, fusedFreqs = null) {
+                this.isFused = isFused;
+                this.id = isFused ? `LEVIATHAN_${String(id).padStart(2, '0')}` : `CRTR_${String(id).padStart(2, '0')}`;
+                this.x = x;
+                this.targetX = x;
+                
+                this.freq = dna.freq;
+                this.brightness = dna.brightness; 
+                this.roughness = dna.roughness;   
+                
+                this.chordFreqs = fusedFreqs;
+
+                this.freqNorm = Math.max(0, Math.min(1, Math.log2(this.freq / 40) / Math.log2(4000 / 40)));
+                this.hue = this.isFused ? 280 : this.freqNorm * 360; 
+                this.saturation = 40 + (this.brightness * 60); 
+                this.lightness = 50 + (this.roughness * 30);
+
+                this.radius = (30 + Math.pow(1.0 - this.freqNorm, 2) * 170) * (isFused ? 1.6 : 1.0); 
+                this.flow = 0.2 + this.brightness * 2.0; 
+                
+                this.nodes = 1 + Math.floor(this.freqNorm * 8); 
+                this.strandCount = isFused ? 8 : Math.max(2, 1 + Math.floor(this.brightness * 4.5)); 
+                this.spineStyle = this.roughness > 0.6 ? 'spiky' : (this.roughness < 0.3 ? 'smooth' : 'wavy');
+                this.isSegmented = this.freqNorm > 0.75;
+                this.offsetSeed = this.brightness * 100;
+
+                if (isFused) {
+                    this.patternType = 'helical';
+                } else if (this.roughness > 0.65) {
+                    this.patternType = 'braided'; 
+                } else if (this.brightness > 0.6) {
+                    this.patternType = 'helical'; 
+                } else if (this.freqNorm < 0.35) {
+                    this.patternType = 'cage';    
+                } else {
+                    this.patternType = 'parallel';
+                }
+
+                this.hasBridges = isFused || (this.roughness > 0.35 || this.brightness > 0.5);
+                this.bridgeSpacing = 16 + Math.floor((1.0 - this.freqNorm) * 32);
+                
+                this.eyeCount = isFused ? 3 : (this.freqNorm > 0.75 ? 3 : (this.freqNorm < 0.25 ? 2 : 1));
+                
+                this.lookAngle = 0;
+                this.lookDist = 0;
+                this.targetLookAngle = Math.random() * Math.PI * 2;
+                this.targetLookDist = Math.random();
+                this.lookTimer = 0;
+
+                this.vibration = 0;
+                this.decayRate = 0.94;
+                this.isSustaining = false;
+                this.nodes_audio = [];
+                this.gainNode = null;
+                
+                this.eyeYOff = 0.2 + (Math.random() * 0.4); 
+                this.blinkTimer = Math.random() * 200;
+                this.isBlinking = false;
+                
+                this.autoTimer = 0;
+                this.burstMode = false;
+                this.burstCount = 0;
+                
+                this.hp = 100;
+                this.maxHp = 100;
+                this.damageFlash = 0;
+                
+                this.resetAutoTimer();
+            }
+
+            resetAutoTimer() {
+                const flowFactor = Math.max(0.1, this.flow);
+                if (this.burstMode && this.burstCount > 0) {
+                    this.nextTrigger = (100 + Math.random() * 300) / flowFactor;
+                    this.burstCount--;
+                } else {
+                    this.burstMode = Math.random() > 0.85; 
+                    if (this.burstMode) this.burstCount = 2 + Math.floor(Math.random() * 4);
+                    this.nextTrigger = (1000 + Math.random() * 4000) / flowFactor;
+                }
+            }
+
+            update() {
+                this.x += (this.targetX - this.x) * 0.08;
+
+                const speed = time * this.flow;
+                this.phaseA = Math.sin(speed * (0.4 + this.brightness)) * 1.0; 
+                this.phaseB = Math.cos(speed * 0.2 + this.offsetSeed) * 0.8; 
+
+                if (this.isFused) {
+                    this.hue = (this.hue + 0.5) % 360;
+                }
+
+                if (!this.isSustaining) {
+                    this.vibration *= this.decayRate;
+                } else {
+                    this.vibration = 0.2 + Math.sin(time * 2 + this.x) * 0.05 + Math.cos(time * 5) * 0.03;
+                }
+
+                this.blinkTimer--;
+                if (this.blinkTimer <= 0) {
+                    this.isBlinking = !this.isBlinking;
+                    this.blinkTimer = this.isBlinking ? (5 + Math.random() * 10) : (100 + Math.random() * 400);
+                }
+
+                this.lookTimer--;
+                if(this.lookTimer <= 0) {
+                    this.targetLookAngle = Math.random() * Math.PI * 2;
+                    this.targetLookDist = Math.random(); 
+                    this.lookTimer = 30 + Math.random() * 80;
+                }
+                this.lookAngle += (this.targetLookAngle - this.lookAngle) * 0.06;
+                this.lookDist += (this.targetLookDist - this.lookDist) * 0.06;
+
+                if (this.damageFlash > 0) this.damageFlash -= 0.05;
+
+                if (isAutoMode && !this.isSustaining && !isFusing) {
+                    this.autoTimer += 16.6; 
+                    if (this.autoTimer > this.nextTrigger) {
+                        const velocityBase = 0.15 + (Math.random() * 0.4);
+                        const vel = this.burstMode ? velocityBase * 0.8 : velocityBase;
+                        const dur = 0.2 + (this.brightness * 1.5) + (Math.random() * 1.0); 
+                        
+                        let harmonicOffset = 1.0;
+                        if (this.burstMode) {
+                            const harmonics = [0.5, 1.0, 1.25, 1.5, 2.0]; 
+                            harmonicOffset = harmonics[Math.floor(Math.random() * harmonics.length)];
+                        }
+
+                        this.trigger(vel, dur, harmonicOffset);
+                        this.autoTimer = 0;
+                        this.resetAutoTimer();
+                    }
+                }
+            }
+
+            draw(ctx) {
+                const floatOffsetY = Math.sin(time * 1.5 + this.x * 0.02) * 25; 
+                ctx.save();
+                ctx.translate(0, floatOffsetY);
+
+                const isSelected = (focusedCreature === this);
+                const alpha = this.isSustaining ? 0.95 : (isSelected ? 0.92 : (isRecording ? 0.9 : 0.7));
+                
+                let strokeColor = `hsla(${this.hue}, ${this.saturation}%, ${this.lightness}%, ${alpha})`;
+                
+                if (this.damageFlash > 0) {
+                    strokeColor = `rgba(239, 68, 68, ${Math.max(0.4, this.damageFlash)})`;
+                    ctx.lineWidth = 2 + (this.damageFlash * 5);
+                } else {
+                    ctx.lineWidth = this.isSustaining ? 3.0 : (isSelected ? 2.2 : 1.5 + (this.vibration * 2));
+                }
+                
+                ctx.strokeStyle = strokeColor;
+                
+                if (this.isSegmented) {
+                    ctx.setLineDash([4 + (this.vibration * 10), 12 + (this.radius * 0.1)]);
+                } else {
+                    ctx.setLineDash([]);
+                }
+                
+                if ((this.isSustaining || isSelected || this.vibration > 0.1 || this.isFused || this.damageFlash > 0) && this.brightness > 0.3) {
+                    ctx.shadowBlur = (10 * this.brightness) + (this.vibration * 30) + (this.isFused ? 20 : 0) + (this.damageFlash * 20) + (isSelected ? 12 : 0);
+                    ctx.shadowColor = this.damageFlash > 0 ? 'rgba(239, 68, 68, 0.8)' : `hsla(${this.hue}, ${this.saturation}%, ${this.lightness}%, 0.6)`;
+                }
+
+                const step = this.spineStyle === 'spiky' ? 10 : 4; 
+                let eyeCenterX = this.x;
+                const absoluteEyeY = height * this.eyeYOff;
+
+                const strandPointsByY = {};
+
+                for (let s = 0; s < this.strandCount; s++) {
+                    ctx.beginPath();
+                    const strandPhaseOffset = (s * Math.PI * 2) / this.strandCount; 
+                    
+                    for (let y = 60; y < height - 60; y += step) {
+                        const ny = (y - 60) / (height - 120);
+                        const taper = Math.sin(ny * Math.PI); 
+                        
+                        let strandXOffset = 0;
+                        const twistSpeed = time * this.flow * 1.5;
+
+                        if (this.patternType === 'helical') {
+                            strandXOffset = Math.sin(ny * Math.PI * (this.nodes + 1) + strandPhaseOffset + twistSpeed) * (this.radius * 0.65) * taper;
+                        } else if (this.patternType === 'braided') {
+                            const dir = (s % 2 === 0) ? 1 : -1;
+                            strandXOffset = Math.sin(ny * Math.PI * this.nodes + this.phaseA * dir + strandPhaseOffset) * (this.radius * 0.5) * taper;
+                        } else if (this.patternType === 'cage') {
+                            const cageWidth = Math.sin(ny * Math.PI) * (this.radius * 0.8);
+                            const strandPos = (s / (this.strandCount - 1 || 1)) - 0.5;
+                            strandXOffset = strandPos * cageWidth * 2 + Math.sin(ny * Math.PI * 2 + twistSpeed) * 8;
+                        } else {
+                            const spineMovement = Math.sin(ny * Math.PI * this.nodes + this.phaseA + strandPhaseOffset) * 0.5 * this.radius * taper;
+                            const spread = Math.sin(ny * Math.PI) * (this.radius * 0.4);
+                            strandXOffset = spineMovement + (s - (this.strandCount - 1) / 2) * spread;
+                        }
+
+                        const thicknessBreath = 1 + Math.sin(time * 2.0 + this.x) * 0.2;
+                        const baseThickness = (this.radius * 0.25) / Math.max(1, this.strandCount * 0.6); 
+                        const thicknessMovement = Math.cos(ny * Math.PI * (this.nodes * 0.5) + this.phaseB) * 0.5;
+                        let thickness = (baseThickness + thicknessMovement * this.radius * 0.2) * taper * thicknessBreath;
+
+                        let noise = 0;
+                        if (this.spineStyle !== 'smooth') {
+                            const noiseFreq = 20 + (this.roughness * 80);
+                            noise = Math.sin(ny * noiseFreq + time * this.flow * 5) * (this.roughness * (this.spineStyle === 'spiky' ? 20 : 8)); 
+                        }
+
+                        const jitter = (Math.random() - 0.5) * this.vibration * 15;
+                        let spineX = this.x + strandXOffset + noise + jitter;
+
+                        if (!strandPointsByY[y]) strandPointsByY[y] = [];
+                        strandPointsByY[y].push(spineX);
+
+                        if (s === 0 && Math.abs(y - absoluteEyeY) < step * 1.5) {
+                            eyeCenterX = spineX; 
+                        }
+
+                        if (this.spineStyle === 'spiky') {
+                            ctx.moveTo(spineX - thickness, y);
+                            ctx.lineTo(spineX, y - (thickness * 0.5)); 
+                            ctx.lineTo(spineX + thickness, y);
+                        } else {
+                            ctx.moveTo(spineX - thickness, y);
+                            ctx.lineTo(spineX + thickness, y);
+                        }
+                    }
+                    ctx.stroke();
+                }
+
+                if (this.hasBridges) {
+                    ctx.beginPath();
+                    ctx.lineWidth = Math.max(0.8, ctx.lineWidth * 0.5);
+                    for (let y = 60; y < height - 60; y += step) {
+                        if ((y - 60) % this.bridgeSpacing < step) {
+                            const pts = strandPointsByY[y];
+                            if (pts && pts.length > 1) {
+                                const minX = Math.min(...pts);
+                                const maxX = Math.max(...pts);
+                                ctx.moveTo(minX, y);
+                                ctx.lineTo(maxX, y);
+                            }
+                        }
+                    }
+                    ctx.stroke();
+                }
+                
+                ctx.setLineDash([]); 
+                ctx.shadowBlur = 0; 
+                this.drawEye(ctx, eyeCenterX, absoluteEyeY);
+                
+                // 血量條與選中指示標記
+                ctx.fillStyle = 'rgba(255,255,255,0.1)';
+                ctx.fillRect(eyeCenterX - 20, absoluteEyeY + 40, 40, 3);
+                ctx.fillStyle = this.hp > 30 ? (this.damageFlash > 0 ? '#ffffff' : '#10b981') : '#ef4444';
+                ctx.fillRect(eyeCenterX - 20, absoluteEyeY + 40, 40 * Math.max(0, (this.hp / this.maxHp)), 3);
+
+                // 當生物被選中時，顯示精簡的 ID 標籤（方便手機收合面板時辨識）
+                if (isSelected) {
+                    ctx.font = '700 10px "JetBrains Mono", monospace';
+                    ctx.fillStyle = '#06b6d4';
+                    ctx.textAlign = 'center';
+                    ctx.fillText(`▼ ${this.id}`, eyeCenterX, absoluteEyeY - 24);
+                }
+
+                ctx.restore();
+            }
+
+            drawEye(ctx, x, y) {
+                const baseEyeRadius = (10 + (this.radius * 0.08)) * (this.isFused ? 1.3 : 1.0);
+                const eyeRadius = baseEyeRadius + (this.vibration * 6);
+
+                const renderSingleEye = (eyex, eyey, r) => {
+                    if (this.isBlinking) {
+                        ctx.beginPath();
+                        ctx.moveTo(eyex - r, eyey);
+                        ctx.lineTo(eyex + r, eyey);
+                        ctx.strokeStyle = '#fff';
+                        ctx.lineWidth = 2;
+                        ctx.stroke();
+                        return;
+                    }
+
+                    ctx.fillStyle = '#ffffff';
+                    ctx.beginPath();
+                    ctx.arc(eyex, eyey, r, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    const pupilRadius = r * 0.45 + (this.vibration * 2);
+                    const maxPupilOffset = r - pupilRadius - 2;
+                    
+                    const lookX = Math.cos(this.lookAngle) * this.lookDist * maxPupilOffset;
+                    const lookY = Math.sin(this.lookAngle) * this.lookDist * maxPupilOffset;
+
+                    ctx.fillStyle = this.isFused ? '#581c87' : '#0f172a';
+                    ctx.beginPath();
+                    ctx.arc(eyex + lookX, eyey + lookY, pupilRadius, 0, Math.PI * 2);
+                    ctx.fill();
+                };
+
+                if (this.eyeCount === 1) {
+                    renderSingleEye(x, y, eyeRadius);
+                } else if (this.eyeCount === 2) {
+                    const offset = eyeRadius * 1.1;
+                    renderSingleEye(x - offset, y, eyeRadius * 0.85);
+                    renderSingleEye(x + offset, y, eyeRadius * 0.85);
+                } else if (this.eyeCount >= 3) {
+                    const offset = eyeRadius * 1.2;
+                    renderSingleEye(x, y - offset * 0.8, eyeRadius * 0.7);
+                    renderSingleEye(x - offset, y + offset * 0.6, eyeRadius * 0.7);
+                    renderSingleEye(x + offset, y + offset * 0.6, eyeRadius * 0.7);
+                }
+            }
+
+            toggle() { this.isSustaining ? this.stop() : this.start(); }
+            
+            trigger(vel, dur = 2.0, harmonicOffset = 1.0) { 
+                if(!this.isSustaining) {
+                    this.createSynth(vel, true, dur, harmonicOffset);
+                    this.vibration = vel;
+                    this.decayRate = Math.max(0.88, 1.0 - (1.0 / (dur * 60)));
+                } 
+            }
+            
+            start() { this.isSustaining = true; this.createSynth(0.6, false, 0, 1.0); }
+            
+            stop() {
+                this.isSustaining = false;
+                this.decayRate = 0.94;
+                if (this.gainNode) {
+                    const t = audioCtx.currentTime;
+                    this.gainNode.gain.cancelScheduledValues(t);
+                    this.gainNode.gain.setValueAtTime(this.gainNode.gain.value, t);
+                    this.gainNode.gain.exponentialRampToValueAtTime(0.001, t + 1.5);
+                    const nodes = [...this.nodes_audio];
+                    setTimeout(() => nodes.forEach(n => { try{n.stop()}catch(e){} }), 1600);
+                }
+                this.gainNode = null; this.nodes_audio = [];
+            }
+
+            createSynth(vel, isMom, dur, harmonicOffset) {
+                if (!audioCtx) initAudio();
+                const t = audioCtx.currentTime;
+                
+                const freqsToPlay = (this.isFused && this.chordFreqs) ? this.chordFreqs : [this.freq * harmonicOffset];
+
+                const vca = audioCtx.createGain();
+                vca.gain.setValueAtTime(0, t);
+                const attack = isMom ? 0.05 + Math.random() * 0.1 : 0.2;
+                vca.gain.linearRampToValueAtTime((0.25 / Math.sqrt(freqsToPlay.length)) * vel, t + attack);
+
+                const panner = audioCtx.createStereoPanner();
+                panner.pan.value = (this.x / width) * 2 - 1;
+
+                const sendGain = audioCtx.createGain();
+                sendGain.gain.value = 0.35 * Math.min(1.5, creatures.length * 0.15);
+                vca.connect(panner).connect(masterGain);
+                vca.connect(sendGain).connect(delayNode);
+
+                freqsToPlay.forEach(f => {
+                    const osc = audioCtx.createOscillator();
+                    if (this.roughness > 0.6) osc.type = 'square';
+                    else if (this.brightness > 0.6) osc.type = 'sawtooth';
+                    else osc.type = 'sine';
+                    
+                    osc.frequency.setValueAtTime(f, t);
+
+                    const filter = audioCtx.createBiquadFilter();
+                    filter.type = 'lowpass';
+                    filter.frequency.setValueAtTime(150 + (this.brightness * 4000), t);
+                    filter.Q.value = 1 + (1.0 - this.roughness) * 8; 
+
+                    osc.connect(filter).connect(vca);
+                    osc.start(t);
+
+                    if (isMom) {
+                        osc.stop(t + dur + 0.1);
+                    } else {
+                        this.nodes_audio.push(osc, filter);
+                    }
+                });
+
+                if (isMom) {
+                    vca.gain.exponentialRampToValueAtTime(0.001, t + dur);
+                } else {
+                    this.gainNode = vca;
+                    this.nodes_audio.push(vca, panner, sendGain);
+                }
+            }
+        }
+
+        async function analyzeAudioDNA(buffer) {
+            const data = buffer.getChannelData(0);
+            const sr = buffer.sampleRate;
+            
+            const freq = autoCorrelate(data, sr);
+            if (freq < 40 || freq > 4000) return null;
+
+            let zcr = 0;
+            for(let j=1; j<data.length; j++) if ((data[j-1] > 0 && data[j] < 0) || (data[j-1] < 0 && data[j] > 0)) zcr++;
+            const zcrRate = zcr / data.length; 
+            const brightness = Math.min(1, zcrRate * 12); 
+            
+            let diffSum = 0, absSum = 0;
+            for(let j=1; j<data.length; j++) {
+                diffSum += Math.abs(data[j] - data[j-1]);
+                absSum += Math.abs(data[j]);
+            }
+            const roughRaw = diffSum / (absSum + 0.001);
+            const roughness = Math.min(1, roughRaw / 1.5);
+
+            return { freq, brightness, roughness };
+        }
+
+        function autoCorrelate(buf, sr) {
+            let rms = 0;
+            for (let i=0; i<buf.length; i++) rms += buf[i]*buf[i];
+            if (Math.sqrt(rms/buf.length) < 0.005) return -1;
+            let n = buf.length;
+            const maxSamples = Math.min(n, 16384); 
+            const c = new Array(maxSamples).fill(0);
+            for (let i=0; i<maxSamples; i++) for (let j=0; j<maxSamples-i; j++) c[i] += buf[j]*buf[j+i];
+            let d=0; while(c[d]>c[d+1]) d++;
+            let maxv=-1, maxp=-1;
+            for(let i=d; i<maxSamples; i++) if(c[i]>maxv) { maxv=c[i]; maxp=i; }
+            return maxp === -1 ? -1 : sr/maxp;
+        }
+
+        function initAudio() {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            masterGain = audioCtx.createGain();
+            masterGain.gain.value = 0.7;
+            masterGain.connect(audioCtx.destination);
+            
+            delayNode = audioCtx.createDelay(1.0);
+            delayNode.delayTime.value = 0.6;
+            feedbackGain = audioCtx.createGain();
+            feedbackGain.gain.value = 0.4;
+            
+            const dFilter = audioCtx.createBiquadFilter();
+            dFilter.type = 'lowpass'; dFilter.frequency.value = 1300;
+            
+            delayNode.connect(dFilter).connect(feedbackGain).connect(delayNode);
+            feedbackGain.connect(masterGain);
+        }
+
+        function showMessage(text, duration = 2000) {
+            loadingMsg.textContent = text;
+            loadingMsg.style.display = 'block';
+            if (duration > 0) setTimeout(() => loadingMsg.style.display = 'none', duration);
+        }
+
+        function addCreature(dna) {
+            if (!dna) return;
+            if (creatures.length >= 8) {
+                showMessage("SYS.CAPACITY_LIMIT_REACHED");
+                return;
+            }
+            
+            const newCreature = new Creature(globalCreatureId++, 0, dna);
+            creatures.push(newCreature);
+            recalculatePositions();
+            focusedCreature = newCreature;
+            statusHeader.innerHTML = `<span class="blink"></span> SYS.ONLINE &mdash; ${newCreature.id} DETECTED`;
+        }
+
+        function recalculatePositions() {
+            const count = creatures.length;
+            if (count === 0) return;
+            const spacing = width / (count + 1);
+            creatures.forEach((c, index) => {
+                c.targetX = spacing * (index + 1);
+                if (c.x === 0) c.x = c.targetX;
+            });
+        }
+
+        removeBtn.addEventListener('click', () => {
+            if (focusedCreature) {
+                focusedCreature.stop();
+                creatures = creatures.filter(c => c !== focusedCreature);
+                recalculatePositions();
+                focusedCreature = creatures.length > 0 ? creatures[0] : null;
+                if (creatures.length === 0) {
+                    statusHeader.innerHTML = '<span class="blink"></span> SONAR.STANDBY &mdash; NO ENTITIES DETECTED';
+                } else {
+                    statusHeader.innerHTML = `<span class="blink"></span> SYS.ONLINE &mdash; ${focusedCreature.id} ACTIVE`;
+                }
+            }
+        });
+
+        audioUpload.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            if (creatures.length >= 8) {
+                showMessage("SYS.CAPACITY_LIMIT_REACHED");
+                return;
+            }
+            showMessage("EXTRACTING_AUDIO_DNA...", 0);
+            const reader = new FileReader();
+            reader.onload = async (ev) => {
+                if (!audioCtx) initAudio();
+                const buffer = await audioCtx.decodeAudioData(ev.target.result);
+                const dna = await analyzeAudioDNA(buffer);
+                if (dna) addCreature(dna);
+                loadingMsg.style.display = 'none';
+            };
+            reader.readAsArrayBuffer(file);
+            e.target.value = ''; 
+        });
+
+        recordBtn.addEventListener('click', async () => {
+            if (recordBtn.disabled) return;
+            if (creatures.length >= 8) {
+                showMessage("SYS.CAPACITY_LIMIT_REACHED");
+                return;
+            }
+            if (!audioCtx) initAudio();
+            
+            recordBtn.disabled = true;
+            recordBtn.classList.add('active');
+
+            try {
+                let stream;
+                let hasVideo = false;
+                
+                try {
+                    stream = await navigator.mediaDevices.getUserMedia({ 
+                        audio: true, 
+                        video: { facingMode: 'environment' }
+                    });
+                    hasVideo = true;
+                    cameraFeed.srcObject = stream;
+                    isRecording = true;
+                    showMessage("DEPLOYING_HYDROPHONE...", 3000);
+                } catch(e) {
+                    console.warn("Camera access failed, falling back to audio only.", e);
+                    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                }
+
+                const mediaRecorder = new MediaRecorder(stream);
+                const audioChunks = [];
+
+                mediaRecorder.addEventListener("dataavailable", event => {
+                    audioChunks.push(event.data);
+                });
+
+                mediaRecorder.addEventListener("stop", async () => {
+                    if (hasVideo) {
+                        isRecording = false;
+                        scanLineY = 0;
+                        cameraFeed.srcObject = null;
+                    }
+                    showMessage("EXTRACTING_AUDIO_DNA...", 0);
+                    
+                    const audioBlob = new Blob(audioChunks);
+                    const arrayBuffer = await audioBlob.arrayBuffer();
+                    const buffer = await audioCtx.decodeAudioData(arrayBuffer);
+                    const dna = await analyzeAudioDNA(buffer);
+                    if (dna) addCreature(dna);
+                    
+                    loadingMsg.style.display = 'none';
+                    stream.getTracks().forEach(track => track.stop());
+                    
+                    recordBtn.disabled = false;
+                    recordBtn.textContent = "Record Mic";
+                    recordBtn.classList.remove('active');
+                });
+
+                mediaRecorder.start();
+                recordBtn.textContent = "Scanning... (6s)";
+                
+                setTimeout(() => {
+                    mediaRecorder.stop();
+                }, 6000); 
+
+            } catch (err) {
+                console.error("Microphone access denied or error:", err);
+                showMessage("MIC_ACCESS_DENIED");
+                recordBtn.disabled = false;
+                recordBtn.classList.remove('active');
+                recordBtn.textContent = "Record Mic";
+            }
+        });
+
+        function playExplosionSound() {
+            if (!audioCtx) return;
+            const t = audioCtx.currentTime;
+            
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(150, t);
+            osc.frequency.exponentialRampToValueAtTime(20, t + 0.5);
+            gain.gain.setValueAtTime(0.8, t);
+            gain.gain.exponentialRampToValueAtTime(0.01, t + 0.8);
+            
+            const bufferSize = audioCtx.sampleRate * 0.5;
+            const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+            const data = buffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+            
+            const noise = audioCtx.createBufferSource();
+            noise.buffer = buffer;
+            const noiseFilter = audioCtx.createBiquadFilter();
+            noiseFilter.type = 'lowpass';
+            noiseFilter.frequency.setValueAtTime(800, t);
+            noiseFilter.frequency.exponentialRampToValueAtTime(100, t + 0.4);
+            const noiseGain = audioCtx.createGain();
+            noiseGain.gain.setValueAtTime(0.5, t);
+            noiseGain.gain.exponentialRampToValueAtTime(0.01, t + 0.4);
+            
+            osc.connect(gain).connect(masterGain);
+            noise.connect(noiseFilter).connect(noiseGain).connect(masterGain);
+            
+            osc.start(t);
+            osc.stop(t + 0.8);
+            noise.start(t);
+        }
+
+        function applyBattleDamage(attackDna) {
+            if (creatures.length === 0) return;
+
+            screenRedFlash = 0.8; 
+            playExplosionSound();
+
+            let maxDamageDone = 0;
+
+            creatures.forEach(c => {
+                const cFreq = c.chordFreqs ? c.chordFreqs[0] : c.freq;
+                
+                const freqDiff = Math.abs(Math.log2(attackDna.freq / 40) - Math.log2(cFreq / 40)) / Math.log2(4000/40);
+                const briDiff = Math.abs(attackDna.brightness - c.brightness);
+                const rogDiff = Math.abs(attackDna.roughness - c.roughness);
+
+                const totalDiff = (freqDiff * 0.5) + (briDiff * 0.25) + (rogDiff * 0.25);
+                
+                const damage = Math.round(10 + (totalDiff * 80));
+                if (damage > maxDamageDone) maxDamageDone = damage;
+                
+                c.hp -= damage;
+                c.damageFlash = 1.0;
+                c.vibration = 1.2; 
+            });
+
+            showMessage(`ACOUSTIC_STRIKE! MAX_DMG: ${maxDamageDone}`, 3000);
+
+            const aliveCreatures = creatures.filter(c => c.hp > 0);
+            const deadCreatures = creatures.filter(c => c.hp <= 0);
+
+            deadCreatures.forEach(c => c.stop());
+            creatures = aliveCreatures;
+            recalculatePositions();
+
+            if (focusedCreature && focusedCreature.hp <= 0) {
+                focusedCreature = creatures.length > 0 ? creatures[0] : null;
+                if (!focusedCreature) {
+                    statusHeader.innerHTML = '<span class="blink"></span> SONAR.STANDBY &mdash; NO ENTITIES DETECTED';
+                } else {
+                    statusHeader.innerHTML = `<span class="blink"></span> SYS.ONLINE &mdash; ${focusedCreature.id} ACTIVE`;
+                }
+            }
+        }
+
+        battleBtn.addEventListener('click', async () => {
+            if (battleBtn.disabled || creatures.length === 0) {
+                if (creatures.length === 0) showMessage("NO_TARGETS_AVAILABLE", 2000);
+                return;
+            }
+            if (!audioCtx) initAudio();
+            
+            battleBtn.disabled = true;
+            battleBtn.classList.add('active');
+
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                const mediaRecorder = new MediaRecorder(stream);
+                const audioChunks = [];
+
+                mediaRecorder.addEventListener("dataavailable", event => {
+                    audioChunks.push(event.data);
+                });
+
+                mediaRecorder.addEventListener("stop", async () => {
+                    showMessage("ANALYZING_ATTACK_SIGNATURE...", 0);
+                    
+                    const audioBlob = new Blob(audioChunks);
+                    const arrayBuffer = await audioBlob.arrayBuffer();
+                    const buffer = await audioCtx.decodeAudioData(arrayBuffer);
+                    const attackDna = await analyzeAudioDNA(buffer);
+                    
+                    loadingMsg.style.display = 'none';
+                    stream.getTracks().forEach(track => track.stop());
+                    
+                    if (attackDna) {
+                        applyBattleDamage(attackDna);
+                    } else {
+                        showMessage("ATTACK_FAILED: INVALID_SIGNATURE", 2000);
+                    }
+                    
+                    battleBtn.disabled = false;
+                    battleBtn.textContent = "⚔️ BATTLE";
+                    battleBtn.classList.remove('active');
+                });
+
+                mediaRecorder.start();
+                battleBtn.textContent = "RECORDING ATTACK... (6s)";
+                
+                setTimeout(() => {
+                    if (mediaRecorder.state === "recording") mediaRecorder.stop();
+                }, 6000); 
+
+            } catch (err) {
+                console.error("Microphone access denied or error:", err);
+                showMessage("MIC_ACCESS_DENIED");
+                battleBtn.disabled = false;
+                battleBtn.classList.remove('active');
+                battleBtn.textContent = "⚔️ BATTLE";
+            }
+        });
+
+        function resize() {
+            width = window.innerWidth; height = window.innerHeight;
+            canvas.width = width; canvas.height = height;
+            recalculatePositions();
+        }
+
+        function updateDataFeed() {
+            if (!focusedCreature) {
+                dId.textContent = '--';
+                dFreq.textContent = '--';
+                dBri.textContent = '--';
+                dRog.textContent = '--';
+                dRad.textContent = '--';
+                dFlow.textContent = '--';
+                dVib.textContent = '--';
+                dHp.textContent = '--';
+                dState.textContent = 'STANDBY';
+                dState.style.color = 'var(--text-main)';
+                return;
+            }
+            dId.textContent = focusedCreature.id;
+            dFreq.textContent = focusedCreature.chordFreqs ? "[CHORD]" : focusedCreature.freq.toFixed(1);
+            dBri.textContent = focusedCreature.brightness.toFixed(3);
+            dRog.textContent = focusedCreature.roughness.toFixed(3);
+            dRad.textContent = focusedCreature.radius.toFixed(1);
+            dFlow.textContent = focusedCreature.flow.toFixed(3);
+            dVib.textContent = focusedCreature.vibration.toFixed(3);
+            dHp.textContent = Math.max(0, Math.floor(focusedCreature.hp)) + '%';
+            
+            if (focusedCreature.isFused) {
+                dState.textContent = 'EVOLVED';
+                dState.style.color = 'var(--fuse-glow)';
+            } else if (focusedCreature.isSustaining) {
+                dState.textContent = 'RESONATING';
+                dState.style.color = 'var(--accent)';
+            } else if (focusedCreature.vibration > 0.05) {
+                dState.textContent = 'EXCITED';
+                dState.style.color = '#d97706';
+            } else {
+                dState.textContent = 'IDLE';
+                dState.style.color = 'var(--text-main)';
+            }
+        }
+
+        function animate() {
+            if (isRecording && cameraFeed.readyState >= 3) {
+                const vRatio = cameraFeed.videoWidth / cameraFeed.videoHeight;
+                const cRatio = width / height;
+                let drawW, drawH;
+                if (cRatio > vRatio) { drawW = width; drawH = width / vRatio; } 
+                else { drawH = height; drawW = height * vRatio; }
+
+                ctx.save();
+                ctx.translate(width / 2, height / 2);
+                ctx.scale(-1, 1);
+                
+                ctx.filter = 'sepia(50%) hue-rotate(180deg) saturate(150%) contrast(120%) brightness(60%)';
+                ctx.drawImage(cameraFeed, -drawW / 2, -drawH / 2, drawW, drawH);
+                ctx.restore();
+
+                ctx.fillStyle = 'rgba(6, 182, 212, 0.4)';
+                scanLineY += 3;
+                if (scanLineY > height) scanLineY = 0;
+                ctx.fillRect(0, scanLineY, width, 2);
+                
+                const grad = ctx.createLinearGradient(0, scanLineY - 40, 0, scanLineY);
+                grad.addColorStop(0, 'rgba(6, 182, 212, 0)');
+                grad.addColorStop(1, 'rgba(6, 182, 212, 0.2)');
+                ctx.fillStyle = grad;
+                ctx.fillRect(0, scanLineY - 40, width, 40);
+
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+                for(let i = 0; i < 15; i++) {
+                    const bx = (Math.sin(time * 1.5 + i * 2) * 80 + i * (width / 15)) % width;
+                    const by = height - ((time * 80 + i * 50) % height);
+                    const br = Math.sin(time + i) * 2 + 3;
+                    ctx.beginPath();
+                    ctx.arc(bx, by, br, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+
+                ctx.fillStyle = 'rgba(2, 6, 23, 0.4)';
+                ctx.fillRect(0, 0, width, height);
+            } else {
+                ctx.fillStyle = 'rgba(2, 6, 23, 0.6)'; 
+                ctx.fillRect(0, 0, width, height);
+            }
+            
+            time += 0.01;
+            if (isRecording) time += 0.02;
+
+            if (isFusing) {
+                fusionProgress += 0.015;
+                const centerX = width / 2;
+
+                creatures.forEach(c => {
+                    c.targetX = centerX;
+                    c.vibration = Math.min(1.0, fusionProgress * 1.5);
+                });
+
+                ctx.save();
+                ctx.strokeStyle = `rgba(124, 58, 237, ${0.3 + Math.sin(fusionProgress * Math.PI * 4) * 0.3})`;
+                ctx.lineWidth = 4;
+                ctx.beginPath();
+                ctx.arc(centerX, height * 0.5, fusionProgress * width * 0.5, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.restore();
+
+                if (fusionProgress >= 1.0) {
+                    isFusing = false;
+                    fusionFlash = 1.0;
+
+                    let sumFreq = 0, sumBri = 0, sumRog = 0;
+                    let allFreqs = [];
+                    creatures.forEach(c => {
+                        sumFreq += c.freq;
+                        sumBri += c.brightness;
+                        sumRog += c.roughness;
+                        if (c.chordFreqs) allFreqs.push(...c.chordFreqs);
+                        else allFreqs.push(c.freq);
+                    });
+
+                    const fusedDna = {
+                        freq: sumFreq / creatures.length,
+                        brightness: Math.min(1.0, (sumBri / creatures.length) * 1.2),
+                        roughness: Math.min(1.0, (sumRog / creatures.length) * 1.2)
+                    };
+
+                    const fusionBonus = currentHarmonyScore * 50 + (creatures.length * 200);
+                    accumulatedEnergy += fusionBonus;
+
+                    creatures = [];
+                    const leviathan = new Creature(globalCreatureId++, centerX, fusedDna, true, allFreqs);
+                    creatures.push(leviathan);
+                    focusedCreature = leviathan;
+
+                    recalculatePositions();
+                    showMessage("POLYPHONIC_LEVIATHAN_EVOLVED!", 3000);
+                    statusHeader.innerHTML = `<span class="blink" style="background:#7c3aed"></span> SYS.ONLINE &mdash; ${leviathan.id} ACTIVE`;
+                    
+                    leviathan.trigger(0.8, 3.5);
+                }
+            }
+
+            if (fusionFlash > 0) {
+                ctx.fillStyle = `rgba(255, 255, 255, ${fusionFlash})`;
+                ctx.fillRect(0, 0, width, height);
+                fusionFlash -= 0.05;
+            }
+            
+            if (screenRedFlash > 0) {
+                ctx.fillStyle = `rgba(239, 68, 68, ${screenRedFlash * 0.25})`;
+                ctx.fillRect(0, 0, width, height);
+                screenRedFlash -= 0.02;
+            }
+
+            creatures.forEach(s => { s.update(); s.draw(ctx); });
+            
+            updateDataFeed();
+            requestAnimationFrame(animate);
+        }
+
+        function handleHover(mx) {
+            creatures.forEach(s => {
+                let d = Math.abs(mx - s.x);
+                if (d < s.radius + 30) {
+                    if (!s.isSustaining) s.vibration = Math.max(s.vibration, 0.15);
+                }
+            });
+        }
+
+        function handleClick(mx) {
+            if (!audioCtx) initAudio();
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            if (isFusing) return;
+            
+            let target = null, minDist = Infinity;
+            creatures.forEach(s => {
+                let d = Math.abs(mx - s.x);
+                if (d < minDist) { minDist = d; target = s; }
+            });
+            if (target && minDist < target.radius + 50) {
+                target.toggle();
+                focusedCreature = target;
+                statusHeader.innerHTML = `<span class="blink"></span> SYS.ONLINE &mdash; ${target.id} SELECTED`;
+            }
+        }
+
+        canvas.addEventListener('mousemove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            mouseX = e.clientX - rect.left;
+            mouseY = e.clientY - rect.top;
+            handleHover(mouseX);
+        });
+
+        canvas.addEventListener('click', () => handleClick(mouseX));
+
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault(); 
+            const rect = canvas.getBoundingClientRect();
+            mouseX = e.touches[0].clientX - rect.left;
+            handleClick(mouseX);
+        }, {passive: false});
+
+        canvas.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            const rect = canvas.getBoundingClientRect();
+            mouseX = e.touches[0].clientX - rect.left;
+            handleHover(mouseX);
+        }, {passive: false});
+
+        window.addEventListener('resize', resize);
+        resize(); animate();
+    </script>
+</body>
+</html>
