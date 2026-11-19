@@ -1,0 +1,1 @@
+Sound Creatures is an audio AR mobile experience that turns everyday sounds into life. Explore your environment and capture subtle audio details to spawn unique creatures that dynamically respond to your surrounding soundscape.
