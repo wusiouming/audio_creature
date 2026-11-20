@@ -653,6 +653,9 @@
         let isRecording = false;
         let scanLineY = 0;
 
+        // Ambient Sonar & Grid Effects (低干擾背景聲納與網格閃現)
+        let ambientEvents = [];
+
         // Fusion State Variables
         let isFusing = false;
         let fusionProgress = 0;
@@ -1627,6 +1630,119 @@
             }
         }
 
+        function updateAndDrawAmbientEffects() {
+            // 提高背景聲納與網格微光的出現頻率與數量上限，讓深海氛圍更明顯
+            if (ambientEvents.length < 8 && Math.random() < 0.03) {
+                const isSonar = Math.random() > 0.45;
+                // 隨機決定網格區塊的跨度 (1 到 3 個 20px 網格單位)
+                const gridSpan = Math.floor(Math.random() * 3) + 1; 
+                ambientEvents.push({
+                    type: isSonar ? 'sonar' : 'gridNode',
+                    x: Math.random() * width,
+                    y: Math.random() * height,
+                    progress: 0,
+                    speed: isSonar ? (0.004 + Math.random() * 0.004) : (0.007 + Math.random() * 0.007),
+                    maxRadius: 80 + Math.random() * 180,
+                    gridSpan: gridSpan,
+                    nodeVariant: Math.random(), // 用於隨機變化網格顯示樣式
+                    code: `SEC_${Math.floor(Math.random() * 90 + 10)} // -${Math.floor(Math.random() * 800 + 200)}m`
+                });
+            }
+
+            ctx.save();
+            for (let i = ambientEvents.length - 1; i >= 0; i--) {
+                const ev = ambientEvents[i];
+                ev.progress += ev.speed;
+
+                if (ev.progress >= 1) {
+                    ambientEvents.splice(i, 1);
+                    continue;
+                }
+
+                // 提高最高透明度至約 0.28，讓視覺更清晰但仍處於背景層級不搶戲
+                const alpha = Math.sin(ev.progress * Math.PI) * 0.28;
+
+                if (ev.type === 'sonar') {
+                    const r = ev.progress * ev.maxRadius;
+                    
+                    // 外圈聲納波紋
+                    ctx.strokeStyle = `rgba(6, 182, 212, ${alpha})`;
+                    ctx.lineWidth = 1.2;
+                    ctx.beginPath();
+                    ctx.arc(ev.x, ev.y, r, 0, Math.PI * 2);
+                    ctx.stroke();
+
+                    // 內圈延遲波紋
+                    if (ev.progress > 0.2) {
+                        const innerR = (ev.progress - 0.2) * ev.maxRadius * 0.85;
+                        ctx.strokeStyle = `rgba(6, 182, 212, ${alpha * 0.7})`;
+                        ctx.lineWidth = 0.8;
+                        ctx.beginPath();
+                        ctx.arc(ev.x, ev.y, innerR, 0, Math.PI * 2);
+                        ctx.stroke();
+                    }
+
+                    // 中心十字準星與微光核心
+                    ctx.fillStyle = `rgba(6, 182, 212, ${alpha * 1.2})`;
+                    ctx.beginPath();
+                    ctx.arc(ev.x, ev.y, 2, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    ctx.strokeStyle = `rgba(6, 182, 212, ${alpha * 1.1})`;
+                    ctx.beginPath();
+                    ctx.moveTo(ev.x - 8, ev.y);
+                    ctx.lineTo(ev.x + 8, ev.y);
+                    ctx.moveTo(ev.x, ev.y - 8);
+                    ctx.lineTo(ev.x, ev.y + 8);
+                    ctx.stroke();
+                } else {
+                    // 對齊 20px 背景網格，並依據 gridSpan 隨機放大節點面積 (20x20 ~ 60x60)
+                    const snapX = Math.round(ev.x / 20) * 20;
+                    const snapY = Math.round(ev.y / 20) * 20;
+                    const blockSize = ev.gridSpan * 20;
+
+                    // 1. 網格區塊微光填充 (面積隨 gridSpan 變化)
+                    ctx.fillStyle = `rgba(6, 182, 212, ${alpha * 0.35})`;
+                    ctx.fillRect(snapX, snapY, blockSize, blockSize);
+
+                    // 2. 網格區塊外框線
+                    ctx.strokeStyle = `rgba(6, 182, 212, ${alpha * 0.85})`;
+                    ctx.lineWidth = 1;
+                    ctx.strokeRect(snapX, snapY, blockSize, blockSize);
+
+                    // 3. 隨機變化節點細節（對角線掃描或四角端點強化）
+                    if (ev.nodeVariant > 0.5) {
+                        ctx.beginPath();
+                        ctx.moveTo(snapX, snapY);
+                        ctx.lineTo(snapX + blockSize, snapY + blockSize);
+                        ctx.strokeStyle = `rgba(6, 182, 212, ${alpha * 0.45})`;
+                        ctx.stroke();
+                    }
+
+                    // 左上角發光原點
+                    ctx.fillStyle = `rgba(6, 182, 212, ${alpha * 1.6})`;
+                    ctx.fillRect(snapX - 2, snapY - 2, 4, 4);
+
+                    // 延伸十字網格線
+                    const crossLen = 15 + ev.gridSpan * 10;
+                    ctx.strokeStyle = `rgba(6, 182, 212, ${alpha * 0.6})`;
+                    ctx.lineWidth = 0.8;
+                    ctx.beginPath();
+                    ctx.moveTo(snapX - crossLen, snapY);
+                    ctx.lineTo(snapX + blockSize + crossLen, snapY);
+                    ctx.moveTo(snapX, snapY - crossLen);
+                    ctx.lineTo(snapX, snapY + blockSize + crossLen);
+                    ctx.stroke();
+
+                    // 聲學深度與區塊尺寸標記
+                    ctx.font = '9px "JetBrains Mono", monospace';
+                    ctx.fillStyle = `rgba(148, 163, 184, ${alpha * 1.4})`;
+                    ctx.fillText(`${ev.code} [${ev.gridSpan}x${ev.gridSpan}]`, snapX + blockSize + 6, snapY + 10);
+                }
+            }
+            ctx.restore();
+        }
+
         function animate() {
             if (isRecording && cameraFeed.readyState >= 3) {
                 const vRatio = cameraFeed.videoWidth / cameraFeed.videoHeight;
@@ -1671,6 +1787,9 @@
                 ctx.fillRect(0, 0, width, height);
             }
             
+            // 在生物繪製之前渲染背景聲納與網格微光，確保位於最底層不干擾視覺
+            updateAndDrawAmbientEffects();
+
             time += 0.01;
             if (isRecording) time += 0.02;
 
